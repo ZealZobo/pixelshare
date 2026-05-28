@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelShare — Upload & Share Images</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a' },
+                        dark: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; }
+        .page { display: none; animation: fadeIn 0.4s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(1.3); opacity: 0; } }
+        .animate-slide-up { animation: slideUp 0.6s ease forwards; }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        .glass { background: rgba(255,255,255,0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .glass-dark { background: rgba(15,23,42,0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .upload-zone { border: 2px dashed #cbd5e1; transition: all 0.3s ease; }
+        .upload-zone.dragover { border-color: #3b82f6; background: #eff6ff; transform: scale(1.01); }
+        .masonry-grid { column-count: 3; column-gap: 1.5rem; }
+        @media (max-width: 1024px) { .masonry-grid { column-count: 2; } }
+        @media (max-width: 640px) { .masonry-grid { column-count: 1; } }
+        .masonry-item { break-inside: avoid; margin-bottom: 1.5rem; }
+        .img-card:hover .img-overlay { opacity: 1; }
+        .img-card:hover img { transform: scale(1.05); }
+        .like-btn.liked { color: #ef4444; }
+        .like-btn.liked i { font-weight: 900; }
+        .nav-link { position: relative; }
+        .nav-link::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px; background: #3b82f6; transition: width 0.3s; border-radius: 2px; }
+        .nav-link.active::after, .nav-link:hover::after { width: 100%; }
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 24px; border-radius: 12px; color: white; font-weight: 500; z-index: 100; transform: translateY(100px); opacity: 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 40px rgba(0,0,0,0.15); }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .progress-bar { height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 2px; transition: width 0.3s ease; }
+        .shimmer { background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .tag-pill { transition: all 0.2s; }
+        .tag-pill:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59,130,246,0.2); }
+        .modal { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        .modal.show { display: flex; }
+        .modal-content { animation: modalIn 0.3s ease; }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .hero-blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.4; }
+        .stats-counter { font-variant-numeric: tabular-nums; }
+    </style>
+    <!-- RichAds Popunder -->
+    <script src="https://richinfo.co/richpartners/pops/js/richads-pu-ob.js" data-pubid="999239" data-siteid="397524" async data-cfasync="false"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-slate-200/60">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <a href="#" onclick="navigateTo('home')" class="flex items-center gap-2.5 group">
+                    <div class="w-9 h-9 bg-gradient-to-br from-brand-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-brand-500/20 group-hover:shadow-brand-500/40 transition-all">
+                        <i class="fa-solid fa-layer-group text-white text-sm"></i>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight text-slate-900">Pixel<span class="text-brand-600">Share</span></span>
+                </a>
+                <div class="hidden md:flex items-center gap-1">
+                    <a href="#" onclick="navigateTo('home')" class="nav-link active px-4 py-2 text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors" data-page="home">Home</a>
+                    <a href="#" onclick="navigateTo('gallery')" class="nav-link px-4 py-2 text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors" data-page="gallery">Gallery</a>
+                    <a href="#" onclick="navigateTo('upload')" class="nav-link px-4 py-2 text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors" data-page="upload">Upload</a>
+                    <a href="#" onclick="navigateTo('profile')" class="nav-link px-4 py-2 text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors" data-page="profile">Profile</a>
+                    <a href="#" onclick="navigateTo('about')" class="nav-link px-4 py-2 text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors" data-page="about">About</a>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="navigateTo('upload')" class="hidden sm:flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 hover:-translate-y-0.5">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>Upload</span>
+                    </button>
+                    <button onclick="toggleMobileMenu()" class="md:hidden p-2 text-slate-600 hover:text-brand-600 transition-colors">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Mobile Menu -->
+        <div id="mobileMenu" class="hidden md:hidden glass border-t border-slate-200/60">
+            <div class="px-4 py-3 space-y-1">
+                <a href="#" onclick="navigateTo('home')" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-brand-50 hover:text-brand-600">Home</a>
+                <a href="#" onclick="navigateTo('gallery')" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-brand-50 hover:text-brand-600">Gallery</a>
+                <a href="#" onclick="navigateTo('upload')" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-brand-50 hover:text-brand-600">Upload</a>
+                <a href="#" onclick="navigateTo('profile')" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-brand-50 hover:text-brand-600">Profile</a>
+                <a href="#" onclick="navigateTo('about')" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-brand-50 hover:text-brand-600">About</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast bg-slate-900"></div>
+
+    <!-- ========== PAGE 1: HOME ========== -->
+    <div id="page-home" class="page active pt-16">
+        <!-- Hero Section -->
+        <section class="relative overflow-hidden bg-white">
+            <div class="hero-blob w-96 h-96 bg-brand-300 -top-20 -right-20"></div>
+            <div class="hero-blob w-80 h-80 bg-violet-300 bottom-0 -left-20"></div>
+            <div class="hero-blob w-64 h-64 bg-pink-200 top-40 right-1/3"></div>
+
+            <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-24 lg:pt-32 lg:pb-40">
+                <div class="text-center max-w-3xl mx-auto">
+                    <div class="inline-flex items-center gap-2 bg-brand-50 border border-brand-200 rounded-full px-4 py-1.5 mb-8 animate-slide-up" style="animation-delay:0.1s">
+                        <span class="w-2 h-2 bg-brand-500 rounded-full animate-pulse"></span>
+                        <span class="text-brand-700 text-sm font-medium">Free image hosting for everyone</span>
+                    </div>
+                    <h1 class="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight mb-6 animate-slide-up" style="animation-delay:0.2s">
+                        Share your vision<br>
+                        <span class="bg-gradient-to-r from-brand-600 to-violet-600 bg-clip-text text-transparent">with the world</span>
+                    </h1>
+                    <p class="text-lg sm:text-xl text-slate-500 mb-10 max-w-2xl mx-auto leading-relaxed animate-slide-up" style="animation-delay:0.3s">
+                        Upload, organize, and share your images in seconds. Join thousands of creators who trust PixelShare for their visual stories.
+                    </p>
+                    <div class="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up" style="animation-delay:0.4s">
+                        <button onclick="navigateTo('upload')" class="w-full sm:w-auto bg-brand-600 hover:bg-brand-700 text-white px-8 py-4 rounded-xl text-base font-semibold transition-all shadow-xl shadow-brand-500/25 hover:shadow-brand-500/40 hover:-translate-y-1 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            Start Uploading
+                        </button>
+                        <button onclick="navigateTo('gallery')" class="w-full sm:w-auto bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-8 py-4 rounded-xl text-base font-semibold transition-all hover:-translate-y-1 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-images"></i>
+                            Browse Gallery
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Floating preview cards -->
+            <div class="relative max-w-6xl mx-auto px-4 -mb-32 hidden lg:block">
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="animate-float" style="animation-delay:0s">
+                        <div class="bg-white rounded-2xl shadow-2xl shadow-slate-200/50 overflow-hidden border border-slate-100">
+                            <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop" class="w-full h-48 object-cover" alt="Mountain landscape">
+                            <div class="p-4">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <div class="w-6 h-6 rounded-full bg-gradient-to-br from-orange-400 to-pink-500"></div>
+                                    <span class="text-xs font-medium text-slate-600">@alex_capture</span>
+                                </div>
+                                <div class="flex items-center gap-4 text-xs text-slate-400">
+                                    <span><i class="fa-regular fa-heart mr-1"></i> 2.4k</span>
+                                    <span><i class="fa-regular fa-comment mr-1"></i> 128</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="animate-float" style="animation-delay:0.5s; margin-top: 40px;">
+                        <div class="bg-white rounded-2xl shadow-2xl shadow-slate-200/50 overflow-hidden border border-slate-100">
+                            <img src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop" class="w-full h-48 object-cover" alt="Night sky">
+                            <div class="p-4">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500"></div>
+                                    <span class="text-xs font-medium text-slate-600">@stargazer</span>
+                                </div>
+                                <div class="flex items-center gap-4 text-xs text-slate-400">
+                                    <span><i class="fa-regular fa-heart mr-1"></i> 5.1k</span>
+                                    <span><i class="fa-regular fa-comment mr-1"></i> 342</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="animate-float" style="animation-delay:1s">
+                        <div class="bg-white rounded-2xl shadow-2xl shadow-slate-200/50 overflow-hidden border border-slate-100">
+                            <img src="https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600&h=400&fit=crop" class="w-full h-48 object-cover" alt="Forest">
+                            <div class="p-4">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <div class="w-6 h-6 rounded-full bg-gradient-to-br from-green-400 to-emerald-600"></div>
+                                    <span class="text-xs font-medium text-slate-600">@nature_lover</span>
+                                </div>
+                                <div class="flex items-center gap-4 text-xs text-slate-400">
+                                    <span><i class="fa-regular fa-heart mr-1"></i> 1.8k</span>
+                                    <span><i class="fa-regular fa-comment mr-1"></i> 89</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Section -->
+        <section class="bg-slate-900 pt-48 pb-20">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div class="text-center">
+                        <div class="text-4xl lg:text-5xl font-bold text-white mb-2 stats-counter" data-target="2500000">0</div>
+                        <div class="text-slate-400 text-sm font-medium">Images Hosted</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-4xl lg:text-5xl font-bold text-white mb-2 stats-counter" data-target="89000">0</div>
+                        <div class="text-slate-400 text-sm font-medium">Active Users</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-4xl lg:text-5xl font-bold text-white mb-2 stats-counter" data-target="50000000">0</div>
+                        <div class="text-slate-400 text-sm font-medium">Monthly Views</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-4xl lg:text-5xl font-bold text-white mb-2 stats-counter" data-target="99.9">0</div>
+                        <div class="text-slate-400 text-sm font-medium">% Uptime</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section class="py-24 bg-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl sm:text-4xl font-bold text-slate-900 mb-4">Why creators choose PixelShare</h2>
+                    <p class="text-slate-500 text-lg max-w-2xl mx-auto">Everything you need to showcase your photography and visual art to a global audience.</p>
+                </div>
+                <div class="grid md:grid-cols-3 gap-8">
+                    <div class="group p-8 rounded-2xl bg-slate-50 hover:bg-white border border-slate-100 hover:border-brand-200 transition-all hover:shadow-xl hover:shadow-brand-500/5 hover:-translate-y-1">
+                        <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-bolt text-brand-600 text-xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 mb-3">Lightning Fast</h3>
+                        <p class="text-slate-500 leading-relaxed">Global CDN delivery ensures your images load instantly anywhere in the world. No more waiting for buffers.</p>
+                    </div>
+                    <div class="group p-8 rounded-2xl bg-slate-50 hover:bg-white border border-slate-100 hover:border-brand-200 transition-all hover:shadow-xl hover:shadow-brand-500/5 hover:-translate-y-1">
+                        <div class="w-14 h-14 bg-violet-100 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-shield-halved text-violet-600 text-xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 mb-3">Secure Storage</h3>
+                        <p class="text-slate-500 leading-relaxed">Enterprise-grade encryption and redundant backups keep your precious memories safe and private.</p>
+                    </div>
+                    <div class="group p-8 rounded-2xl bg-slate-50 hover:bg-white border border-slate-100 hover:border-brand-200 transition-all hover:shadow-xl hover:shadow-brand-500/5 hover:-translate-y-1">
+                        <div class="w-14 h-14 bg-pink-100 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-share-nodes text-pink-600 text-xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 mb-3">Easy Sharing</h3>
+                        <p class="text-slate-500 leading-relaxed">One-click sharing to social media, embed codes for websites, and direct links for anywhere you need.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Section -->
+        <section class="py-24 bg-gradient-to-br from-brand-600 to-violet-700 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-10">
+                <div class="absolute top-0 left-0 w-full h-full" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 40px 40px;"></div>
+            </div>
+            <div class="relative max-w-4xl mx-auto px-4 text-center">
+                <h2 class="text-3xl sm:text-5xl font-bold text-white mb-6">Ready to share your story?</h2>
+                <p class="text-brand-100 text-lg mb-10 max-w-2xl mx-auto">Join our community of photographers, designers, and visual storytellers. Start uploading for free today.</p>
+                <button onclick="navigateTo('upload')" class="bg-white text-brand-700 px-10 py-4 rounded-xl text-lg font-bold hover:bg-brand-50 transition-all shadow-2xl hover:shadow-white/20 hover:-translate-y-1">
+                    Create Free Account
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <!-- ========== PAGE 2: GALLERY ========== -->
+    <div id="page-gallery" class="page pt-16">
+        <div class="bg-white border-b border-slate-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 class="text-3xl font-bold text-slate-900">Explore Gallery</h1>
+                        <p class="text-slate-500 mt-1">Discover amazing images from our community</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input type="text" id="gallerySearch" placeholder="Search images..." oninput="filterGallery()" class="pl-9 pr-4 py-2.5 bg-slate-100 border-0 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all w-64">
+                        </div>
+                        <select id="gallerySort" onchange="sortGallery()" class="py-2.5 px-4 bg-slate-100 border-0 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 cursor-pointer">
+                            <option value="newest">Newest First</option>
+                            <option value="popular">Most Popular</option>
+                            <option value="oldest">Oldest First</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Tags -->
+                <div class="flex flex-wrap gap-2 mt-6">
+                    <button onclick="filterByTag('all')" class="tag-pill px-4 py-1.5 rounded-full text-sm font-medium bg-brand-600 text-white" data-tag="all">All</button>
+                    <button onclick="filterByTag('nature')" class="tag-pill px-4 py-1.5 rounded-full text-sm font-medium bg-slate-100 text-slate-600 hover:bg-brand-50 hover:text-brand-600" data-tag="nature">Nature</button>
+                    <button onclick="filterByTag('architecture')" class="tag-pill px-4 py-1.5 rounded-full text-sm font-medium bg-slate-100 text-slate-600 hover:bg-brand-50 hover:text-brand-600" data-tag="architecture">Architecture</button>
+                    <button onclick="filterByTag('people')" class="tag-pill px-4 py-1.5 rounded-full text-sm font-medium bg-slate-100 text-slate-600 hover:bg-brand-50 hover:text-brand-600" data-tag="people">People</button>
+                    <button onclick="filterByTag('abstract')" class="tag-pill px-4 py-1.5 rounded-full text-sm font-medium bg-slate-100 text-slate-600 hover:bg-brand-50 hover:text-brand-600" data-tag="abstract">Abstract</button>
+                    <button onclick="filterByTag('technology')" class="tag-pill px-4 py-1.5 rounded-full text-sm font-medium bg-slate-100 text-slate-600 hover:bg-brand-50 hover:text-brand-600" data-tag="technology">Technology</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div id="galleryGrid" class="masonry-grid">
+                <!-- Gallery items injected by JS -->
+            </div>
+            <div id="galleryEmpty" class="hidden text-center py-20">
+                <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-regular fa-image text-slate-400 text-2xl"></i>
+                </div>
+                <p class="text-slate-500 font-medium">No images found</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== PAGE 3: UPLOAD ========== -->
+    <div id="page-upload" class="page pt-16">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div class="text-center mb-10">
+                <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">Upload Your Images</h1>
+                <p class="text-slate-500">Drag and drop or click to select files. Supports JPG, PNG, GIF up to 20MB.</p>
+            </div>
+
+            <!-- Upload Zone -->
+            <div id="uploadZone" class="upload-zone rounded-2xl bg-white p-12 text-center cursor-pointer mb-8 relative" onclick="document.getElementById('fileInput').click()">
+                <input type="file" id="fileInput" multiple accept="image/*" class="hidden" onchange="handleFiles(this.files)">
+                <div class="w-20 h-20 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <i class="fa-solid fa-cloud-arrow-up text-brand-500 text-3xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-900 mb-2">Drop your images here</h3>
+                <p class="text-slate-400 text-sm mb-6">or click to browse from your device</p>
+                <div class="flex items-center justify-center gap-4 text-xs text-slate-400">
+                    <span class="flex items-center gap-1"><i class="fa-regular fa-file-image"></i> JPG, PNG, GIF</span>
+                    <span class="flex items-center gap-1"><i class="fa-solid fa-weight-hanging"></i> Up to 20MB</span>
+                    <span class="flex items-center gap-1"><i class="fa-solid fa-images"></i> Multiple files</span>
+                </div>
+            </div>
+
+            <!-- Upload Queue -->
+            <div id="uploadQueue" class="space-y-4 mb-8"></div>
+
+            <!-- Upload Settings -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-8">
+                <h3 class="text-lg font-semibold text-slate-900 mb-4">Upload Settings</h3>
+                <div class="grid sm:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Privacy</label>
+                        <select id="uploadPrivacy" class="w-full py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                            <option value="public">Public — Everyone can see</option>
+                            <option value="unlisted">Unlisted — Only with link</option>
+                            <option value="private">Private — Only you</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                        <select id="uploadCategory" class="w-full py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                            <option value="nature">Nature</option>
+                            <option value="architecture">Architecture</option>
+                            <option value="people">People</option>
+                            <option value="abstract">Abstract</option>
+                            <option value="technology">Technology</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Tags (comma separated)</label>
+                    <input type="text" id="uploadTags" placeholder="sunset, beach, summer..." class="w-full py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-end gap-4">
+                <button onclick="clearUploads()" class="px-6 py-3 text-slate-600 font-medium hover:text-slate-900 transition-colors">Clear All</button>
+                <button onclick="startUpload()" id="uploadBtn" class="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    Upload Images
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== PAGE 4: IMAGE DETAIL ========== -->
+    <div id="page-detail" class="page pt-16">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <button onclick="navigateTo('gallery')" class="flex items-center gap-2 text-slate-500 hover:text-brand-600 transition-colors mb-6">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span class="font-medium">Back to Gallery</span>
+            </button>
+
+            <div class="grid lg:grid-cols-3 gap-8">
+                <!-- Main Image -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-100">
+                        <img id="detailImage" src="" alt="" class="w-full object-contain max-h-[70vh]">
+                    </div>
+
+                    <!-- Action Bar -->
+                    <div class="flex items-center justify-between mt-4 bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <button onclick="toggleDetailLike()" id="detailLikeBtn" class="like-btn flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-50 hover:bg-red-50 transition-all">
+                                <i class="fa-regular fa-heart text-lg"></i>
+                                <span id="detailLikeCount" class="font-medium">0</span>
+                            </button>
+                            <button onclick="showShareModal()" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-50 hover:bg-brand-50 text-slate-600 hover:text-brand-600 transition-all">
+                                <i class="fa-solid fa-share-nodes"></i>
+                                <span class="font-medium">Share</span>
+                            </button>
+                            <button onclick="downloadImage()" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-50 hover:bg-brand-50 text-slate-600 hover:text-brand-600 transition-all">
+                                <i class="fa-solid fa-download"></i>
+                                <span class="font-medium">Download</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm text-slate-400">
+                            <i class="fa-regular fa-eye"></i>
+                            <span id="detailViews">0 views</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar Info -->
+                <div class="space-y-6">
+                    <!-- Author Card -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div id="detailAvatar" class="w-12 h-12 rounded-full bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center text-white font-bold text-lg"></div>
+                            <div>
+                                <div id="detailAuthor" class="font-semibold text-slate-900"></div>
+                                <div class="text-sm text-slate-400">@<span id="detailUsername"></span></div>
+                            </div>
+                            <button onclick="toggleFollow()" id="followBtn" class="ml-auto px-4 py-1.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors">Follow</button>
+                        </div>
+                        <p id="detailBio" class="text-slate-500 text-sm leading-relaxed"></p>
+                    </div>
+
+                    <!-- Image Info -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                        <h3 class="font-semibold text-slate-900 mb-4">Image Details</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Uploaded</span>
+                                <span id="detailDate" class="text-slate-700 font-medium"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Dimensions</span>
+                                <span id="detailDimensions" class="text-slate-700 font-medium"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Size</span>
+                                <span id="detailSize" class="text-slate-700 font-medium"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Category</span>
+                                <span id="detailCategory" class="text-slate-700 font-medium capitalize"></span>
+                            </div>
+                        </div>
+                        <div id="detailTags" class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100"></div>
+                    </div>
+
+                    <!-- Comments -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                        <h3 class="font-semibold text-slate-900 mb-4">Comments (<span id="commentCount">0</span>)</h3>
+                        <div id="commentsList" class="space-y-4 max-h-64 overflow-y-auto mb-4"></div>
+                        <div class="flex gap-2">
+                            <input type="text" id="commentInput" placeholder="Add a comment..." class="flex-1 py-2 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500" onkeypress="if(event.key==='Enter') addComment()">
+                            <button onclick="addComment()" class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== PAGE 5: PROFILE ========== -->
+    <div id="page-profile" class="page pt-16">
+        <!-- Profile Header -->
+        <div class="bg-white border-b border-slate-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                    <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-brand-400 via-violet-500 to-pink-500 p-1">
+                        <div class="w-full h-full rounded-full bg-white p-1">
+                            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&h=300&fit=crop&crop=face" alt="Profile" class="w-full h-full rounded-full object-cover">
+                        </div>
+                    </div>
+                    <div class="text-center sm:text-left flex-1">
+                        <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">Alex Morgan</h1>
+                        <p class="text-slate-500 font-medium">@alex_capture</p>
+                        <p class="text-slate-600 mt-2 max-w-xl">Photography enthusiast capturing moments around the world. Based in San Francisco. Available for freelance projects.</p>
+                        <div class="flex items-center justify-center sm:justify-start gap-6 mt-4">
+                            <div class="text-center">
+                                <div class="text-xl font-bold text-slate-900">142</div>
+                                <div class="text-xs text-slate-400 font-medium uppercase tracking-wide">Posts</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-xl font-bold text-slate-900">12.5k</div>
+                                <div class="text-xs text-slate-400 font-medium uppercase tracking-wide">Followers</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-xl font-bold text-slate-900">483</div>
+                                <div class="text-xs text-slate-400 font-medium uppercase tracking-wide">Following</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-xl font-bold text-slate-900">89k</div>
+                                <div class="text-xs text-slate-400 font-medium uppercase tracking-wide">Likes</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <button class="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 transition-colors shadow-lg shadow-brand-500/20">Edit Profile</button>
+                        <button class="px-4 py-2.5 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Content -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Tabs -->
+            <div class="flex items-center gap-1 border-b border-slate-200 mb-8">
+                <button onclick="switchProfileTab('uploads')" class="profile-tab active px-6 py-3 text-sm font-medium text-brand-600 border-b-2 border-brand-600 transition-colors" data-tab="uploads">My Uploads</button>
+                <button onclick="switchProfileTab('liked')" class="profile-tab px-6 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors" data-tab="liked">Liked</button>
+                <button onclick="switchProfileTab('collections')" class="profile-tab px-6 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors" data-tab="collections">Collections</button>
+                <button onclick="switchProfileTab('stats')" class="profile-tab px-6 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors" data-tab="stats">Stats</button>
+            </div>
+
+            <!-- My Uploads -->
+            <div id="profile-uploads" class="profile-content">
+                <div id="profileUploadsGrid" class="masonry-grid"></div>
+            </div>
+
+            <!-- Liked -->
+            <div id="profile-liked" class="profile-content hidden">
+                <div id="profileLikedGrid" class="masonry-grid"></div>
+            </div>
+
+            <!-- Collections -->
+            <div id="profile-collections" class="profile-content hidden">
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="group cursor-pointer">
+                        <div class="relative rounded-2xl overflow-hidden aspect-[4/3]">
+                            <img src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&h=450&fit=crop" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                            <div class="absolute bottom-4 left-4 text-white">
+                                <h3 class="font-bold text-lg">Nature Escapes</h3>
+                                <p class="text-sm text-white/70">24 images</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="group cursor-pointer">
+                        <div class="relative rounded-2xl overflow-hidden aspect-[4/3]">
+                            <img src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=600&h=450&fit=crop" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                            <div class="absolute bottom-4 left-4 text-white">
+                                <h3 class="font-bold text-lg">Urban Architecture</h3>
+                                <p class="text-sm text-white/70">18 images</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="group cursor-pointer">
+                        <div class="relative rounded-2xl overflow-hidden aspect-[4/3]">
+                            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=450&fit=crop" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                            <div class="absolute bottom-4 left-4 text-white">
+                                <h3 class="font-bold text-lg">Portraits</h3>
+                                <p class="text-sm text-white/70">31 images</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div id="profile-stats" class="profile-content hidden">
+                <div class="grid lg:grid-cols-2 gap-8">
+                    <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                        <h3 class="font-semibold text-slate-900 mb-6">Upload Activity</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-slate-500">This Week</span>
+                                <div class="flex items-center gap-3 flex-1 mx-4">
+                                    <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-brand-500 rounded-full" style="width: 65%"></div>
+                                    </div>
+                                    <span class="text-sm font-medium text-slate-700 w-8">12</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-slate-500">This Month</span>
+                                <div class="flex items-center gap-3 flex-1 mx-4">
+                                    <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-violet-500 rounded-full" style="width: 82%"></div>
+                                    </div>
+                                    <span class="text-sm font-medium text-slate-700 w-8">48</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-slate-500">This Year</span>
+                                <div class="flex items-center gap-3 flex-1 mx-4">
+                                    <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-pink-500 rounded-full" style="width: 45%"></div>
+                                    </div>
+                                    <span class="text-sm font-medium text-slate-700 w-8">142</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                        <h3 class="font-semibold text-slate-900 mb-6">Top Categories</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center"><i class="fa-solid fa-leaf text-emerald-600"></i></div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-sm font-medium text-slate-700">Nature</span>
+                                        <span class="text-sm text-slate-500">42%</span>
+                                    </div>
+                                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width: 42%"></div></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><i class="fa-solid fa-city text-blue-600"></i></div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-sm font-medium text-slate-700">Architecture</span>
+                                        <span class="text-sm text-slate-500">28%</span>
+                                    </div>
+                                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full" style="width: 28%"></div></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center"><i class="fa-solid fa-user text-orange-600"></i></div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-sm font-medium text-slate-700">People</span>
+                                        <span class="text-sm text-slate-500">18%</span>
+                                    </div>
+                                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-orange-500 rounded-full" style="width: 18%"></div></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><i class="fa-solid fa-shapes text-purple-600"></i></div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-sm font-medium text-slate-700">Abstract</span>
+                                        <span class="text-sm text-slate-500">12%</span>
+                                    </div>
+                                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-purple-500 rounded-full" style="width: 12%"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== PAGE 6: ABOUT ========== -->
+    <div id="page-about" class="page pt-16">
+        <!-- Hero -->
+        <div class="bg-gradient-to-br from-brand-600 to-violet-700 py-24 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 40px 40px;"></div>
+            <div class="max-w-4xl mx-auto px-4 text-center relative">
+                <h1 class="text-4xl sm:text-5xl font-bold text-white mb-6">About PixelShare</h1>
+                <p class="text-brand-100 text-lg max-w-2xl mx-auto leading-relaxed">We're building the most creator-friendly image platform on the internet. No compression, no watermarks, no limits — just your vision, shared beautifully.</p>
+            </div>
+        </div>
+
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            <!-- Mission -->
+            <div class="mb-16">
+                <h2 class="text-2xl font-bold text-slate-900 mb-4">Our Mission</h2>
+                <p class="text-slate-600 leading-relaxed mb-4">PixelShare was founded in 2024 with a simple belief: everyone deserves a beautiful place to share their visual stories. Whether you're a professional photographer, a hobbyist, or someone who just loves taking pictures, we've built a platform that puts your work first.</p>
+                <p class="text-slate-600 leading-relaxed">We don't compress your images into oblivion. We don't slap watermarks on your art. We don't sell your data. We just provide the best possible canvas for your creativity.</p>
+            </div>
+
+            <!-- Values -->
+            <div class="grid sm:grid-cols-2 gap-6 mb-16">
+                <div class="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center mb-4">
+                        <i class="fa-solid fa-heart text-brand-600 text-xl"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-900 mb-2">Creator First</h3>
+                    <p class="text-slate-500 text-sm leading-relaxed">Every decision we make starts with one question: "Is this good for creators?" If the answer is no, we don't do it.</p>
+                </div>
+                <div class="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center mb-4">
+                        <i class="fa-solid fa-lock text-violet-600 text-xl"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-900 mb-2">Privacy Matters</h3>
+                    <p class="text-slate-500 text-sm leading-relaxed">Your images are yours. We use end-to-end encryption and never train AI models on your content without explicit consent.</p>
+                </div>
+                <div class="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mb-4">
+                        <i class="fa-solid fa-bolt text-emerald-600 text-xl"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-900 mb-2">Blazing Fast</h3>
+                    <p class="text-slate-500 text-sm leading-relaxed">Our global CDN ensures your images load in milliseconds, no matter where your audience is located.</p>
+                </div>
+                <div class="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div class="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center mb-4">
+                        <i class="fa-solid fa-infinity text-pink-600 text-xl"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-900 mb-2">Truly Unlimited</h3>
+                    <p class="text-slate-500 text-sm leading-relaxed">No arbitrary storage limits. No bandwidth caps. Share as much as you want, as often as you want.</p>
+                </div>
+            </div>
+
+            <!-- Team -->
+            <div class="mb-16">
+                <h2 class="text-2xl font-bold text-slate-900 mb-8 text-center">Meet the Team</h2>
+                <div class="grid sm:grid-cols-3 gap-8">
+                    <div class="text-center">
+                        <div class="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-brand-400 to-cyan-400 p-1 mb-4">
+                            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face" class="w-full h-full rounded-full object-cover">
+                        </div>
+                        <h3 class="font-bold text-slate-900">Marcus Chen</h3>
+                        <p class="text-brand-600 text-sm font-medium">Founder & CEO</p>
+                        <p class="text-slate-400 text-sm mt-2">Former engineer at CloudFlare. Photography addict.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-violet-400 to-pink-400 p-1 mb-4">
+                            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face" class="w-full h-full rounded-full object-cover">
+                        </div>
+                        <h3 class="font-bold text-slate-900">Sarah Williams</h3>
+                        <p class="text-brand-600 text-sm font-medium">Head of Design</p>
+                        <p class="text-slate-400 text-sm mt-2">Award-winning UX designer. Cat enthusiast.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-orange-400 to-red-400 p-1 mb-4">
+                            <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face" class="w-full h-full rounded-full object-cover">
+                        </div>
+                        <h3 class="font-bold text-slate-900">David Park</h3>
+                        <p class="text-brand-600 text-sm font-medium">Lead Developer</p>
+                        <p class="text-slate-400 text-sm mt-2">Open source contributor. Coffee connoisseur.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-8">
+                <h2 class="text-2xl font-bold text-slate-900 mb-2">Get in Touch</h2>
+                <p class="text-slate-500 mb-8">Have questions, feedback, or just want to say hi? We'd love to hear from you.</p>
+                <div class="grid sm:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Name</label>
+                        <input type="text" class="w-full py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="Your name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Email</label>
+                        <input type="email" class="w-full py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="you@example.com">
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Message</label>
+                    <textarea rows="4" class="w-full py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none" placeholder="Tell us what's on your mind..."></textarea>
+                </div>
+                <button onclick="showToast('Message sent! We'll get back to you soon.')" class="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20">
+                    Send Message
+                </button>
+                <div class="mt-8 pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center gap-6 text-slate-400">
+                        <a href="#" class="hover:text-brand-600 transition-colors"><i class="fa-brands fa-twitter text-xl"></i></a>
+                        <a href="#" class="hover:text-brand-600 transition-colors"><i class="fa-brands fa-instagram text-xl"></i></a>
+                        <a href="#" class="hover:text-brand-600 transition-colors"><i class="fa-brands fa-github text-xl"></i></a>
+                        <a href="#" class="hover:text-brand-600 transition-colors"><i class="fa-brands fa-discord text-xl"></i></a>
+                    </div>
+                    <p class="text-sm text-slate-400">hello@pixelshare.io</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div id="shareModal" class="modal" onclick="if(event.target===this) closeShareModal()">
+        <div class="modal-content bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-slate-900">Share Image</h3>
+                <button onclick="closeShareModal()" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark text-slate-500"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <button onclick="copyLink()" class="w-full flex items-center gap-3 p-4 rounded-xl bg-slate-50 hover:bg-brand-50 border border-slate-100 hover:border-brand-200 transition-all group">
+                    <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center group-hover:border-brand-300 transition-colors">
+                        <i class="fa-solid fa-link text-slate-500 group-hover:text-brand-600"></i>
+                    </div>
+                    <div class="text-left">
+                        <div class="font-medium text-slate-900">Copy Link</div>
+                        <div class="text-xs text-slate-400">Share direct URL</div>
+                    </div>
+                </button>
+                <button onclick="showToast('Embed code copied!')" class="w-full flex items-center gap-3 p-4 rounded-xl bg-slate-50 hover:bg-brand-50 border border-slate-100 hover:border-brand-200 transition-all group">
+                    <div class="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center group-hover:border-brand-300 transition-colors">
+                        <i class="fa-solid fa-code text-slate-500 group-hover:text-brand-600"></i>
+                    </div>
+                    <div class="text-left">
+                        <div class="font-medium text-slate-900">Embed Code</div>
+                        <div class="text-xs text-slate-400">HTML for your website</div>
+                    </div>
+                </button>
+                <div class="flex gap-3 mt-4">
+                    <button onclick="showToast('Shared to Twitter!')" class="flex-1 py-3 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 transition-colors">
+                        <i class="fa-brands fa-x-twitter mr-2"></i>Twitter
+                    </button>
+                    <button onclick="showToast('Shared to Facebook!')" class="flex-1 py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">
+                        <i class="fa-brands fa-facebook mr-2"></i>Facebook
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 py-12 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+                <div>
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-8 h-8 bg-gradient-to-br from-brand-500 to-violet-500 rounded-lg flex items-center justify-center">
+                            <i class="fa-solid fa-layer-group text-white text-xs"></i>
+                        </div>
+                        <span class="font-bold text-lg text-white">PixelShare</span>
+                    </div>
+                    <p class="text-sm leading-relaxed">The fastest, most beautiful way to share your images with the world.</p>
+                </div>
+                <div>
+                    <h4 class="text-white font-semibold mb-4">Product</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" onclick="navigateTo('upload')" class="hover:text-white transition-colors">Upload</a></li>
+                        <li><a href="#" onclick="navigateTo('gallery')" class="hover:text-white transition-colors">Gallery</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">API</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Pro Plans</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-white font-semibold mb-4">Company</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" onclick="navigateTo('about')" class="hover:text-white transition-colors">About</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Blog</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Careers</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Press</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-white font-semibold mb-4">Legal</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" class="hover:text-white transition-colors">Privacy</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Terms</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Cookie Policy</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-slate-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p class="text-sm"> 2024 PixelShare. All rights reserved.</p>
+                <div class="flex items-center gap-4">
+                    <a href="#" class="hover:text-white transition-colors"><i class="fa-brands fa-twitter"></i></a>
+                    <a href="#" class="hover:text-white transition-colors"><i class="fa-brands fa-instagram"></i></a>
+                    <a href="#" class="hover:text-white transition-colors"><i class="fa-brands fa-github"></i></a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ===== DATA =====
+        const sampleImages = [
+            { id: 1, url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&q=80', title: 'Mountain Sunrise', author: 'Alex Morgan', username: 'alex_capture', avatar: 'AM', likes: 2430, views: 45200, category: 'nature', date: '2024-04-20', size: '2.4 MB', dimensions: '3840 x 2560', tags: ['mountain', 'sunrise', 'landscape'], bio: 'Photography enthusiast capturing moments around the world.', comments: [{user:'Jane D.', text:'Absolutely stunning shot!', time:'2h ago'},{user:'Mike R.', text:'The colors are incredible.', time:'5h ago'}] },
+            { id: 2, url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400&q=80', title: 'Starry Night', author: 'Alex Morgan', username: 'alex_capture', avatar: 'AM', likes: 5100, views: 89300, category: 'nature', date: '2024-04-18', size: '3.1 MB', dimensions: '4096 x 2731', tags: ['stars', 'night', 'sky'], bio: 'Photography enthusiast capturing moments around the world.', comments: [{user:'StarGazer', text:'Wow, what camera did you use?', time:'1d ago'}] },
+            { id: 3, url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400&q=80', title: 'Morning Mist', author: 'Alex Morgan', username: 'alex_capture', avatar: 'AM', likes: 1820, views: 32100, category: 'nature', date: '2024-04-15', size: '1.8 MB', dimensions: '3600 x 2400', tags: ['forest', 'mist', 'morning'], bio: 'Photography enthusiast capturing moments around the world.', comments: [] },
+            { id: 4, url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&q=80', title: 'City Heights', author: 'Sarah Williams', username: 'sarah_design', avatar: 'SW', likes: 3200, views: 56700, category: 'architecture', date: '2024-04-22', size: '2.8 MB', dimensions: '4000 x 3000', tags: ['city', 'building', 'urban'], bio: 'Designer and urban photographer based in NYC.', comments: [{user:'ArchLover', text:'Perfect symmetry!', time:'3h ago'}] },
+            { id: 5, url: 'https://images.unsplash.com/photo-1511818966892-d7d671e672a2?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1511818966892-d7d671e672a2?w=400&q=80', title: 'Geometric Patterns', author: 'David Park', username: 'dpark_codes', avatar: 'DP', likes: 890, views: 15400, category: 'abstract', date: '2024-04-21', size: '1.2 MB', dimensions: '3200 x 3200', tags: ['abstract', 'geometry', 'minimal'], bio: 'Developer by day, photographer by night.', comments: [] },
+            { id: 6, url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400&q=80', title: 'Code & Coffee', author: 'David Park', username: 'dpark_codes', avatar: 'DP', likes: 1560, views: 28900, category: 'technology', date: '2024-04-19', size: '2.1 MB', dimensions: '3840 x 2560', tags: ['code', 'laptop', 'workspace'], bio: 'Developer by day, photographer by night.', comments: [{user:'DevGirl', text:'My daily setup too!', time:'6h ago'}] },
+            { id: 7, url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80', title: 'Portrait Study', author: 'Sarah Williams', username: 'sarah_design', avatar: 'SW', likes: 4200, views: 72100, category: 'people', date: '2024-04-17', size: '3.5 MB', dimensions: '4000 x 6000', tags: ['portrait', 'people', 'blackwhite'], bio: 'Designer and urban photographer based in NYC.', comments: [{user:'PhotoPro', text:'Amazing lighting.', time:'4h ago'},{user:'ArtFan', text:'Love the composition.', time:'8h ago'}] },
+            { id: 8, url: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400&q=80', title: 'Valley View', author: 'Alex Morgan', username: 'alex_capture', avatar: 'AM', likes: 2750, views: 49800, category: 'nature', date: '2024-04-14', size: '2.6 MB', dimensions: '3840 x 2560', tags: ['valley', 'green', 'hiking'], bio: 'Photography enthusiast capturing moments around the world.', comments: [] },
+            { id: 9, url: 'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800&q=80', thumb: 'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=400&q=80', title: 'Urban Jungle', author: 'Sarah Williams', username: 'sarah_design', avatar: 'SW', likes: 1980, views: 34200, category: 'architecture', date: '2024-04-12', size: '2.3 MB', dimensions: '3600 x 2400', tags: ['cityscape', 'buildings', 'skyline'], bio: 'Designer and urban photographer based in NYC.', comments: [{user:'CityFan', text:'Which city is this?', time:'1d ago'}] },
+        ];
+
+        let images = [...sampleImages];
+        let currentDetailId = null;
+        let uploadQueue = [];
+        let likedImages = new Set();
+
+        // ===== NAVIGATION =====
+        function navigateTo(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            document.querySelectorAll('.nav-link[data-page="' + page + '"]').forEach(l => l.classList.add('active'));
+            document.getElementById('mobileMenu').classList.add('hidden');
+            window.scrollTo(0, 0);
+
+            if (page === 'gallery') renderGallery();
+            if (page === 'profile') renderProfileUploads();
+            if (page === 'home') animateCounters();
+        }
+
+        function toggleMobileMenu() {
+            document.getElementById('mobileMenu').classList.toggle('hidden');
+        }
+
+        // ===== GALLERY =====
+        function renderGallery(filteredImages = images) {
+            const grid = document.getElementById('galleryGrid');
+            const empty = document.getElementById('galleryEmpty');
+
+            if (filteredImages.length === 0) {
+                grid.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+
+            grid.innerHTML = filteredImages.map(img => `
+                <div class="masonry-item img-card group relative rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100 cursor-pointer" onclick="openDetail(${img.id})">
+                    <img src="${img.thumb}" alt="${img.title}" class="w-full object-cover transition-transform duration-500" loading="lazy">
+                    <div class="img-overlay absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 transition-opacity duration-300 flex flex-col justify-end p-4">
+                        <h3 class="text-white font-semibold text-sm mb-1">${img.title}</h3>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center text-white text-xs font-bold">${img.avatar}</div>
+                                <span class="text-white/80 text-xs">${img.author}</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-white/80 text-xs">
+                                <span><i class="fa-regular fa-heart mr-1"></i>${formatNumber(img.likes)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterGallery() {
+            const query = document.getElementById('gallerySearch').value.toLowerCase();
+            const filtered = images.filter(img => 
+                img.title.toLowerCase().includes(query) || 
+                img.tags.some(t => t.toLowerCase().includes(query)) ||
+                img.author.toLowerCase().includes(query)
+            );
+            renderGallery(filtered);
+        }
+
+        function sortGallery() {
+            const sort = document.getElementById('gallerySort').value;
+            let sorted = [...images];
+            if (sort === 'popular') sorted.sort((a,b) => b.likes - a.likes);
+            else if (sort === 'oldest') sorted.sort((a,b) => new Date(a.date) - new Date(b.date));
+            else sorted.sort((a,b) => new Date(b.date) - new Date(a.date));
+            renderGallery(sorted);
+        }
+
+        function filterByTag(tag) {
+            document.querySelectorAll('.tag-pill').forEach(p => {
+                if (p.dataset.tag === tag) {
+                    p.classList.remove('bg-slate-100', 'text-slate-600');
+                    p.classList.add('bg-brand-600', 'text-white');
+                } else {
+                    p.classList.add('bg-slate-100', 'text-slate-600');
+                    p.classList.remove('bg-brand-600', 'text-white');
+                }
+            });
+            if (tag === 'all') renderGallery();
+            else renderGallery(images.filter(img => img.category === tag));
+        }
+
+        // ===== IMAGE DETAIL =====
+        function openDetail(id) {
+            const img = images.find(i => i.id === id);
+            if (!img) return;
+            currentDetailId = id;
+
+            document.getElementById('detailImage').src = img.url;
+            document.getElementById('detailImage').alt = img.title;
+            document.getElementById('detailLikeCount').textContent = formatNumber(img.likes);
+            document.getElementById('detailViews').textContent = formatNumber(img.views) + ' views';
+            document.getElementById('detailAuthor').textContent = img.author;
+            document.getElementById('detailUsername').textContent = img.username;
+            document.getElementById('detailAvatar').textContent = img.avatar;
+            document.getElementById('detailBio').textContent = img.bio;
+            document.getElementById('detailDate').textContent = formatDate(img.date);
+            document.getElementById('detailDimensions').textContent = img.dimensions;
+            document.getElementById('detailSize').textContent = img.size;
+            document.getElementById('detailCategory').textContent = img.category;
+
+            const likeBtn = document.getElementById('detailLikeBtn');
+            if (likedImages.has(id)) {
+                likeBtn.classList.add('liked');
+                likeBtn.querySelector('i').classList.replace('fa-regular', 'fa-solid');
+            } else {
+                likeBtn.classList.remove('liked');
+                likeBtn.querySelector('i').classList.replace('fa-solid', 'fa-regular');
+            }
+
+            document.getElementById('detailTags').innerHTML = img.tags.map(t => 
+                `<span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">#${t}</span>`
+            ).join('');
+
+            renderComments(img);
+            navigateTo('detail');
+        }
+
+        function toggleDetailLike() {
+            const img = images.find(i => i.id === currentDetailId);
+            const btn = document.getElementById('detailLikeBtn');
+            const count = document.getElementById('detailLikeCount');
+
+            if (likedImages.has(currentDetailId)) {
+                likedImages.delete(currentDetailId);
+                img.likes--;
+                btn.classList.remove('liked');
+                btn.querySelector('i').classList.replace('fa-solid', 'fa-regular');
+            } else {
+                likedImages.add(currentDetailId);
+                img.likes++;
+                btn.classList.add('liked');
+                btn.querySelector('i').classList.replace('fa-regular', 'fa-solid');
+                showToast('Added to liked images!');
+            }
+            count.textContent = formatNumber(img.likes);
+        }
+
+        function toggleFollow() {
+            const btn = document.getElementById('followBtn');
+            if (btn.textContent === 'Follow') {
+                btn.textContent = 'Following';
+                btn.classList.replace('bg-brand-600', 'bg-slate-200');
+                btn.classList.replace('text-white', 'text-slate-700');
+                showToast('Now following!');
+            } else {
+                btn.textContent = 'Follow';
+                btn.classList.replace('bg-slate-200', 'bg-brand-600');
+                btn.classList.replace('text-slate-700', 'text-white');
+            }
+        }
+
+        function renderComments(img) {
+            document.getElementById('commentCount').textContent = img.comments.length;
+            document.getElementById('commentsList').innerHTML = img.comments.map(c => `
+                <div class="flex gap-3">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center text-white text-xs font-bold shrink-0">${c.user.charAt(0)}</div>
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-slate-900 text-sm">${c.user}</span>
+                            <span class="text-xs text-slate-400">${c.time}</span>
+                        </div>
+                        <p class="text-slate-600 text-sm mt-0.5">${c.text}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addComment() {
+            const input = document.getElementById('commentInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const img = images.find(i => i.id === currentDetailId);
+            img.comments.push({ user: 'You', text: text, time: 'Just now' });
+            renderComments(img);
+            input.value = '';
+            showToast('Comment posted!');
+        }
+
+        function downloadImage() {
+            showToast('Download started!');
+        }
+
+        // ===== UPLOAD =====
+        const uploadZone = document.getElementById('uploadZone');
+        uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFiles(files) {
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                const id = Date.now() + Math.random();
+                const item = { id, file, name: file.name, size: (file.size / 1024 / 1024).toFixed(2), progress: 0 };
+                uploadQueue.push(item);
+                renderUploadItem(item);
+            });
+        }
+
+        function renderUploadItem(item) {
+            const div = document.createElement('div');
+            div.id = 'upload-' + item.id;
+            div.className = 'bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4';
+            div.innerHTML = `
+                <div class="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                    <i class="fa-regular fa-image text-slate-400"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-medium text-slate-900 text-sm truncate">${item.name}</span>
+                        <span class="text-xs text-slate-400">${item.size} MB</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" id="progress-${item.id}" style="width: 0%"></div>
+                    </div>
+                </div>
+                <button onclick="removeUpload('${item.id}')" class="w-8 h-8 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+            document.getElementById('uploadQueue').appendChild(div);
+        }
+
+        function removeUpload(id) {
+            uploadQueue = uploadQueue.filter(u => u.id != id);
+            document.getElementById('upload-' + id)?.remove();
+        }
+
+        function clearUploads() {
+            uploadQueue = [];
+            document.getElementById('uploadQueue').innerHTML = '';
+        }
+
+        function startUpload() {
+            if (uploadQueue.length === 0) {
+                showToast('Please select files to upload');
+                return;
+            }
+            const btn = document.getElementById('uploadBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Uploading...';
+
+            uploadQueue.forEach((item, index) => {
+                setTimeout(() => {
+                    let progress = 0;
+                    const interval = setInterval(() => {
+                        progress += Math.random() * 15;
+                        if (progress >= 100) {
+                            progress = 100;
+                            clearInterval(interval);
+                            document.getElementById('progress-' + item.id).style.width = '100%';
+
+                            // Add to gallery
+                            const newImg = {
+                                id: Date.now() + Math.random(),
+                                url: URL.createObjectURL(item.file),
+                                thumb: URL.createObjectURL(item.file),
+                                title: item.name.replace(/\.[^/.]+$/, ""),
+                                author: 'Alex Morgan',
+                                username: 'alex_capture',
+                                avatar: 'AM',
+                                likes: 0,
+                                views: 0,
+                                category: document.getElementById('uploadCategory').value,
+                                date: new Date().toISOString().split('T')[0],
+                                size: item.size + ' MB',
+                                dimensions: 'Unknown',
+                                tags: document.getElementById('uploadTags').value.split(',').map(t => t.trim()).filter(t => t),
+                                bio: 'Photography enthusiast capturing moments around the world.',
+                                comments: []
+                            };
+                            images.unshift(newImg);
+
+                            if (index === uploadQueue.length - 1) {
+                                setTimeout(() => {
+                                    showToast('Upload complete! Images added to gallery.');
+                                    clearUploads();
+                                    btn.disabled = false;
+                                    btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Upload Images';
+                                    navigateTo('gallery');
+                                }, 500);
+                            }
+                        } else {
+                            document.getElementById('progress-' + item.id).style.width = progress + '%';
+                        }
+                    }, 200);
+                }, index * 800);
+            });
+        }
+
+        // ===== PROFILE =====
+        function switchProfileTab(tab) {
+            document.querySelectorAll('.profile-tab').forEach(t => {
+                t.classList.remove('active', 'text-brand-600', 'border-b-2', 'border-brand-600');
+                t.classList.add('text-slate-500');
+            });
+            document.querySelector('.profile-tab[data-tab="' + tab + '"]').classList.add('active', 'text-brand-600', 'border-b-2', 'border-brand-600');
+            document.querySelector('.profile-tab[data-tab="' + tab + '"]').classList.remove('text-slate-500');
+
+            document.querySelectorAll('.profile-content').forEach(c => c.classList.add('hidden'));
+            document.getElementById('profile-' + tab).classList.remove('hidden');
+
+            if (tab === 'uploads') renderProfileUploads();
+            if (tab === 'liked') renderProfileLiked();
+        }
+
+        function renderProfileUploads() {
+            const myImages = images.filter(i => i.username === 'alex_capture');
+            document.getElementById('profileUploadsGrid').innerHTML = myImages.map(img => `
+                <div class="masonry-item img-card group relative rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100 cursor-pointer" onclick="openDetail(${img.id})">
+                    <img src="${img.thumb}" alt="${img.title}" class="w-full object-cover transition-transform duration-500" loading="lazy">
+                    <div class="img-overlay absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 transition-opacity duration-300 flex flex-col justify-end p-4">
+                        <h3 class="text-white font-semibold text-sm mb-1">${img.title}</h3>
+                        <div class="flex items-center gap-3 text-white/80 text-xs">
+                            <span><i class="fa-regular fa-heart mr-1"></i>${formatNumber(img.likes)}</span>
+                            <span><i class="fa-regular fa-eye mr-1"></i>${formatNumber(img.views)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderProfileLiked() {
+            const liked = images.filter(i => likedImages.has(i.id));
+            document.getElementById('profileLikedGrid').innerHTML = liked.length ? liked.map(img => `
+                <div class="masonry-item img-card group relative rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100 cursor-pointer" onclick="openDetail(${img.id})">
+                    <img src="${img.thumb}" alt="${img.title}" class="w-full object-cover transition-transform duration-500" loading="lazy">
+                    <div class="img-overlay absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 transition-opacity duration-300 flex flex-col justify-end p-4">
+                        <h3 class="text-white font-semibold text-sm mb-1">${img.title}</h3>
+                        <div class="flex items-center gap-2">
+                            <div class="w-5 h-5 rounded-full bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center text-white text-xs font-bold">${img.avatar}</div>
+                            <span class="text-white/80 text-xs">${img.author}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('') : '<p class="text-center text-slate-400 py-12 col-span-full">No liked images yet</p>';
+        }
+
+        // ===== SHARE MODAL =====
+        function showShareModal() {
+            document.getElementById('shareModal').classList.add('show');
+        }
+        function closeShareModal() {
+            document.getElementById('shareModal').classList.remove('show');
+        }
+        function copyLink() {
+            navigator.clipboard?.writeText(window.location.href + '?img=' + currentDetailId);
+            showToast('Link copied to clipboard!');
+            closeShareModal();
+        }
+
+        // ===== TOAST =====
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // ===== UTILS =====
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num.toString();
+        }
+        function formatDate(dateStr) {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        // ===== COUNTER ANIMATION =====
+        function animateCounters() {
+            document.querySelectorAll('.stats-counter').forEach(counter => {
+                const target = parseFloat(counter.dataset.target);
+                const duration = 2000;
+                const start = performance.now();
+                const isDecimal = target % 1 !== 0;
+
+                function update(now) {
+                    const elapsed = now - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const eased = 1 - Math.pow(1 - progress, 3);
+                    const current = target * eased;
+
+                    if (isDecimal) counter.textContent = current.toFixed(1);
+                    else if (target >= 1000000) counter.textContent = (current / 1000000).toFixed(1) + 'M';
+                    else if (target >= 1000) counter.textContent = (current / 1000).toFixed(0) + 'k';
+                    else counter.textContent = Math.floor(current).toLocaleString();
+
+                    if (progress < 1) requestAnimationFrame(update);
+                }
+                requestAnimationFrame(update);
+            });
+        }
+
+        // ===== INIT =====
+        renderGallery();
+        setTimeout(animateCounters, 500);
+    </script>
+</body>
+</html>
